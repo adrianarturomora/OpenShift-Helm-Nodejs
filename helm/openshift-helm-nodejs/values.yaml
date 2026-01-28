@@ -1,0 +1,46 @@
+replicaCount: 2
+
+image:
+  repository: openshift-helm-nodejs
+  tag: "v2"
+  pullPolicy: IfNotPresent
+
+service:
+  type: ClusterIP
+  port: 8080
+
+route:
+  enabled: true
+  host: ""
+  tls:
+    enabled: true
+    termination: edge
+
+resources:
+  requests:
+    cpu: 50m
+    memory: 64Mi
+  limits:
+    cpu: 250m
+    memory: 256Mi
+
+probes:
+  path: /healthz
+  initialDelaySeconds: 5
+  periodSeconds: 10
+
+env:
+  APP_VERSION: "1.0.0"
+
+config:
+  enabled: true
+  data:
+    EXAMPLE_CONFIG: "hello-from-configmap"
+
+secret:
+  enabled: false
+  data: {}
+
+serviceAccount:
+  create: false
+  name: ""

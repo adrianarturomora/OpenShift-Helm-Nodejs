@@ -1,0 +1,13 @@
+{
+  "name": "openshift-helm-nodejs",
+  "version": "1.0.0",
+  "description": "Node.js app deployed to OpenShift using Helm (Route included)",
+  "main": "src/server.js",
+  "scripts": {
+    "start": "node src/server.js",
+    "test": "node -e \"console.log('tests ok')\""
+  },
+  "dependencies": {
+    "express": "^4.19.2"
+  }
+}

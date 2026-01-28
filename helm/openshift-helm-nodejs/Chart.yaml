@@ -1,0 +1,6 @@
+apiVersion: v2
+name: openshift-helm-nodejs
+description: Node.js app deployed to Openshift using Helm (Route included)
+type: application
+version: 0.1.0
+appVersion: "0.1.0"

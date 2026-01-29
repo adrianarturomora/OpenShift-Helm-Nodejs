@@ -1,30 +1,29 @@
 # syntax=docker/dockerfile:1
 
-########################
-# deps stage (build)
-########################
-FROM node:22-bookworm-slim AS deps
+############################################
+# deps stage: install production node_modules
+############################################
+FROM node:22-alpine AS deps
 WORKDIR /app
 
-# Install deps with good caching
+# Only copy manifests first for better caching
 COPY app/package*.json ./
-RUN npm ci --omit=dev && npm cache clean --force
+RUN npm ci --omit=dev
 
-########################
-# runtime stage (no npm)
-########################
-FROM gcr.io/distroless/nodejs22-debian12:nonroot AS runtime
+############################################
+# runtime stage: distroless (no npm)
+############################################
+FROM gcr.io/distroless/nodejs22-debian12 AS runtime
 WORKDIR /app
 
-ENV NODE_ENV=production
-ENV PORT=8080
-
-# Copy node_modules + app source
+# Copy production deps + app source
 COPY --from=deps /app/node_modules ./node_modules
 COPY app/src ./src
 COPY app/package.json ./package.json
 
+ENV NODE_ENV=production
+ENV PORT=8080
 EXPOSE 8080
 
-# Run directly with node (no npm in image)
+# distroless node images run "node" by default, but we’ll be explicit:
 CMD ["src/server.js"]

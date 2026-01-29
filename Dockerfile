@@ -1,27 +1,28 @@
 # syntax=docker/dockerfile:1
-FROM node:20-alpine
 
+# ---- deps stage ----
+FROM node:20-alpine AS deps
 WORKDIR /app
-
-# Upgrade npm to fix vulnerabilities in npm's bundled deps
-RUN npm install -g npm@latest
-
-# Install deps first for better caching
 COPY app/package*.json ./
 RUN npm ci --omit=dev
 
-# Copy app source
-COPY app/ ./
+# ---- runtime stage ----
+FROM node:20-alpine AS runtime
+WORKDIR /app
+
+# Copy only what we need at runtime
+COPY --from=deps /app/node_modules ./node_modules
+COPY app/src ./src
+COPY app/package.json ./package.json
 
 ENV NODE_ENV=production
 ENV PORT=8080
 
 EXPOSE 8080
 
-# Ensure app dir is owned by the node user (uid 1000)
+# OpenShift-friendly permissions and non-root UID
 RUN chown -R 1000:1000 /app
-
-# Run as non-root numeric UID (works everywhere, OpenShift-safe)
 USER 1000:1000
 
-CMD ["npm", "start"]
+# Avoid npm entirely at runtime
+CMD ["node", "src/server.js"]

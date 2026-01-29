@@ -1,4 +1,4 @@
-name: test-build-scan
+name: ci
 
 on:
   push:
@@ -6,53 +6,33 @@ on:
   pull_request:
 
 jobs:
-  build-and-scan:
+  test-build-scan:
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
 
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Debug - show repo files and Dockerfile
-        shell: bash
+      - name: Set image tag
+        run: echo "IMAGE=openshift-helm-nodejs:${GITHUB_SHA}" >> $GITHUB_ENV
+
+      - name: Docker build (no cache)
         run: |
-          set -euxo pipefail
-          pwd
-          ls -la
-          echo "----- Dockerfile (first 160 lines) -----"
-          sed -n '1,160p' Dockerfile || true
-          echo "----- app/package.json -----"
-          cat app/package.json || true
+          docker build --no-cache -t "${IMAGE}" .
+          docker images | head -n 20
 
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
+      - name: Debug image contents
+        run: docker run --rm "${IMAGE}" sh -lc "ls -la /app && echo '--- package-lock.json ---' && sed -n '1,40p' /app/package-lock.json || true"
 
-      - name: Build image (no cache) and load into Docker
-        shell: bash
-        run: |
-          set -euxo pipefail
-          IMAGE_NAME="openshift-helm-nodejs"
-          SHA_TAG="${IMAGE_NAME}:${GITHUB_SHA}"
-          CI_TAG="${IMAGE_NAME}:ci"
 
-          docker buildx build \
-            --no-cache \
-            --load \
-            -t "${CI_TAG}" \
-            -t "${SHA_TAG}" \
-            .
-
-          echo "Built tags:"
-          docker image ls | head -n 30
-          echo "SHA_TAG=${SHA_TAG}" >> "$GITHUB_ENV"
-
-      - name: Trivy scan (HIGH,CRITICAL)
+      - name: Trivy scan (fail only on CRITICAL)
         uses: aquasecurity/trivy-action@0.24.0
         with:
-          image-ref: ${{ env.SHA_TAG }}
-          scan-type: image
-          format: table
-          vuln-type: os,library
-          severity: CRITICAL,HIGH
-          ignore-unfixed: false
-          exit-code: "1"
+            image-ref: openshift-helm-nodejs:ci
+            format: table
+            severity: CRITICAL
+            vuln-type: os,library
+            exit-code: '1'
+

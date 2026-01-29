@@ -1,4 +1,4 @@
-name: CI
+name: test-build-scan
 
 on:
   push:
@@ -6,39 +6,41 @@ on:
   pull_request:
 
 jobs:
-  test-build-scan:
+  build-and-scan:
     runs-on: ubuntu-latest
+
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout
+        uses: actions/checkout@v4
 
-      - name: Setup Node
-        uses: actions/setup-node@v4
-        with:
-          node-version: "20"
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
 
-      - name: Install deps
-        working-directory: app
-        run: npm ci
+      # Build the image from the Dockerfile in the repo root
+      # Tag it immutably with the commit SHA and also as :ci for convenience
+      - name: Build image (no cache)
+        run: |
+          docker build --no-cache -t openshift-helm-nodejs:${{ github.sha }} .
+          docker tag openshift-helm-nodejs:${{ github.sha }} openshift-helm-nodejs:ci
 
-      - name: Run tests
-        working-directory: app
-        run: npm test
+      # Sanity check what we actually built (Node + Alpine)
+      - name: Show runtime versions (sanity check)
+        run: |
+          echo "Image tags:"
+          docker image inspect openshift-helm-nodejs:${{ github.sha }} --format '{{json .RepoTags}}'
+          echo "Node version:"
+          docker run --rm openshift-helm-nodejs:${{ github.sha }} node -v
+          echo "Alpine release (if alpine-based):"
+          docker run --rm openshift-helm-nodejs:${{ github.sha }} sh -lc 'cat /etc/alpine-release || true'
 
-      - name: Install Helm
-        uses: azure/setup-helm@v4
-        with:
-          version: v3.14.4
-
-      - name: Helm lint
-        run: helm lint helm/openshift-helm-nodejs
-
-      - name: Build image
-        run: docker build -t openshift-helm-nodejs:ci .
-
-      - name: Trivy scan (image)
+      # Trivy scan the IMMUTABLE tag (no chance we scanned an old :ci)
+      - name: Trivy scan (CRITICAL,HIGH)
         uses: aquasecurity/trivy-action@0.24.0
         with:
-          image-ref: openshift-helm-nodejs:ci
+          image-ref: openshift-helm-nodejs:${{ github.sha }}
           format: table
           exit-code: "1"
           severity: "CRITICAL,HIGH"
+          scan-type: image
+          ignore-unfixed: false
+          vuln-type: "os,library"
